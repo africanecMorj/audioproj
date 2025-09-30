@@ -10,8 +10,13 @@ require(`dotenv`).config();
 
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '..' , 'client', 'dist')));
-app.use(bodyParser.urlencoded({extended:true}))
+app.use(bodyParser.urlencoded({extended:true}));
 
+mongoose.connect(MONGO_URI)
+.then(() => {
+    console.log('MongoDB connected')
+});
+ 
 app.get(/.*/, (req,res) => {
     res.sendFile(path.join(__dirname, '..', 'client' , 'dist' , 'index.html'));
 });
