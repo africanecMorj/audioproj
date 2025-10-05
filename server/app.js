@@ -11,6 +11,7 @@ const PasswordModel = require('./middleware/passwordModel/passwordModel');
 const genHash = require('./middleware/hasfFunction/hashFunction');
 const mailFunc = require('./middleware/mailerFunction/mailerFunction');
 require(`dotenv`).config();
+const crypto = require('crypto');
 
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '..' , 'client', 'dist')));
@@ -43,16 +44,21 @@ app.post('/api/register', async(req, res) => {
     .then(value => {
       let accountSample = AccountModel({
         login: login,
+        token: null
       });
       let passwordSample = PasswordModel({
         salt: value.salt,
         hash: value.hash
       });
 
-      passwordSample.save();
-      accountSample.save();
-
-      res.send('Account succesesfully saved').status(201);
+      try{
+        passwordSample.save();
+        accountSample.save();
+        res.send('Account succesesfully saved').status(201);
+      } catch(err) {
+        console.log(err);
+        res.send('Server error').status(500)
+      }
     });
     
   };
@@ -93,6 +99,10 @@ app.post(`/api/account-verif`, async(req, res) => {
      mailFunc(mailOptions);
      codesObj[login] = result;
      
+     setTimeout(() => {
+      codesObj[login] = undefined;
+     }, 50000);
+
      res.send('verification code was sent').status(200);
 
   } else if(!passverif && !loginverif) {
@@ -104,8 +114,40 @@ app.post(`/api/account-verif`, async(req, res) => {
   } else if(!loginverif) {
     res.send('Login undefinded').status(404);
   }
-})
+});
 
+app.post('/api/account-token', async(req, res) => {
+  const {code,login} = req.body;
+  if(codesObj[login] == code) {
+    const token = crypto.randomBytes(64).toString('hex');
+    try{
+      AccountModel.findOneAndUpdate({login:login},{token: token});
+      res.json(token);
+      codesObj[login] = undefined;
+    } catch(err) {
+      console.log(err);
+      res.send('Server error').status(500);
+    };
+  } else {
+      res.send('Code is undefinded.Try login later').status(404)
+  }
+});
+
+app.post('/api/account-auth', async(req, res) => {
+  const {token, login} = req.body;
+  const account = await AccountModel.findOne({login:login});
+  if(account.token == token){
+    res.send('Account verifed').status(200);
+  }else{
+    try{
+      AccountModel.findOneAndUpdate({login:login},{token: null});
+    } catch (err){
+      console.log(err);
+    };
+    res.send('Token is undefinded. Please login in your account again').status(404);
+  };
+  
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on PORT:${PORT}`)
